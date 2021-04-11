@@ -1,0 +1,34 @@
+.input-text-area {
+    -fx-pref-height: 20px;
+}
+
+.grid {
+    -fx-background-color: white;
+    -fx-alignment: center;
+    -fx-padding: 10px;
+    -fx-hgap: 10px;
+    -fx-vgap: 10px;
+}
+
+.custom-button {
+    -fx-background-color: white;
+    -fx-pref-width: infinity;
+    -fx-pref-height: 40px;
+}
+
+.custom-button:hover {
+    -fx-background-color: black;
+}
+
+.box {
+    -fx-background-color: white;
+    -fx-alignment: center;
+    -fx-padding: 10px;
+    -fx-spacing: 10px;
+}
+
+.title-label {
+    -fx-font-size: 36px;
+    -fx-text-fill: black;
+    -fx-alignment: center;
+}

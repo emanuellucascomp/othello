@@ -1,0 +1,78 @@
+.hex {
+    -fx-fill:  rgb(0, 255, 0);
+    -fx-stroke: black;
+}
+
+.hex-active-black {
+    -fx-fill: rgb(0, 0, 0);
+    -fx-stroke: black;
+}
+
+.hex-active-white {
+    -fx-fill: rgb(255, 255, 255);
+    -fx-stroke: black;
+}
+
+.hex-highlight {
+    -fx-fill: gold;
+}
+
+.hex-black {
+    -fx-fill: black;
+    -fx-stroke: black;
+}
+
+.hex-white {
+    -fx-fill: white;
+    -fx-stroke: black;
+}
+
+.chat-text-area {
+    -fx-pref-height: 470px;
+}
+
+.chat-text-input {
+    -fx-pref-height: 70px;
+    -fx-pref-width: 370px;
+}
+
+.chat-send-button {
+    -fx-pref-height: 70px;
+    -fx-pref-width: 50px;
+}
+
+.no-focus-effect {
+    -fx-focus-color: transparent;
+    -fx-faint-focus-color: transparent;
+}
+
+.transparent {
+    -fx-background-color: transparent;
+}
+
+.waiting-panel {
+    -fx-background-color: rgba(0, 0, 0, 0.8);
+}
+
+.label {
+    -fx-font-size: 24px;
+    -fx-text-fill: white;
+}
+
+.button-box {
+    -fx-spacing: 15px
+}
+
+.custom-button {
+    -fx-background-color: white;
+    -fx-pref-width: 190px;
+    -fx-pref-height: 25px;
+}
+
+.custom-button:hover {
+    -fx-background-color: cadetblue;
+}
+
+.full-button {
+    -fx-pref-width: 400px;
+}
