@@ -37,7 +37,7 @@ public class GameView {
 
     private HBox buttonsHBox;
     private String playerColor;
-    private String oponentColor;
+    private String opponentColor;
 
     private Pane board;
 
@@ -236,8 +236,8 @@ public class GameView {
         this.playerColor = playerColor;
     }
 
-    public void setOponentColor(String oponentColor) {
-        this.oponentColor = oponentColor;
+    public void setOponentColor(String opponentColor) {
+        this.opponentColor = opponentColor;
     }
 
     public void setGameScene(Scene gameScene) {
@@ -288,6 +288,10 @@ public class GameView {
         this.buttonsHBox = buttonsHBox;
     }
 
+    public void setOpponentColor(String opponentColor) {
+        this.opponentColor = opponentColor;
+    }
+
     public void showPlayerTurn() {
         this.turnLabel.setText("Sua Vez");
         this.turnPane.setStyle("-fx-background-color: " + playerColor + "");
@@ -295,7 +299,7 @@ public class GameView {
 
     public void showOponentTurn() {
         this.turnLabel.setText("Vez do Oponente");
-        this.turnPane.setStyle("-fx-background-color: " + oponentColor + "");
+        this.turnPane.setStyle("-fx-background-color: " + opponentColor + "");
     }
 
     public Button getRestartButton() {

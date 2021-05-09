@@ -1,6 +1,7 @@
 package br.com.ppd.controller;
 
 import br.com.ppd.model.*;
+import br.com.ppd.thread.CommunicationControllerImpl;
 import br.com.ppd.thread.ThreadUpdateView;
 import br.com.ppd.utilitary.BufferUtilitary;
 import br.com.ppd.utilitary.MatrizUtilitary;
@@ -10,6 +11,11 @@ import javafx.scene.layout.Pane;
 import javafx.stage.Stage;
 
 import java.io.IOException;
+import java.rmi.NotBoundException;
+import java.rmi.RemoteException;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
+import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -18,64 +24,83 @@ public class GameViewController {
     private GameView view;
     private Board board;
     private Player player;
-    private Player oponent;
+    private Player opponent;
     private List<Square> possibleMoves;
     private Square movingPiece;
     private boolean canMove;
     private boolean hasMoved;
     private boolean hasJumped;
     private BufferUtilitary buffer;
-    private CommandController communicationController;
-    private ThreadUpdateView threadUpdateView;
+    private CommunicationController communicator;
+    private CommunicationControllerImpl communicationControllerImpl;
+    private Registry registry;
 
 
-
-    public GameViewController(Stage stage, Player player, Player oponent, Address address) {
+    public GameViewController(Stage stage, Player player, Player opponent) {
         view = new GameView(stage);
         view.setPlayerColor(player.getColor());
-        view.setOponentColor(oponent.getColor());
+        view.setOpponentColor(opponent.getColor());
         stage.setOnCloseRequest(e -> closeGame());
         stage.setTitle("Othello - " + player.getId());
         board = new Board();
         board.createBoard();
-        this.oponent = oponent;
+        this.opponent = opponent;
         this.player = player;
-        this.possibleMoves = new ArrayList<>();
+        this.possibleMoves = new ArrayList<Square>();
         this.buffer = new BufferUtilitary();
         this.canMove = true;
         this.hasJumped = false;
         this.hasMoved = false;
 
-        this.communicationController = new CommandController(address.getIpAddress(), address.getPort());
-    }
-
-    private void initUpdaterThread() {
-        this.threadUpdateView = new ThreadUpdateView(this.board, this.buffer, this.communicationController.getReceivedCommands(), this.communicationController.getUpdateViewLock(), this.view);
-        this.threadUpdateView.setResetFunction(() -> resetState());
-        Thread updater = new Thread(this.threadUpdateView);
-        updater.start();
+        firstCommunication();
+        if (this.player.getId() == 2) {
+            secondCommunication();
+        }
 
     }
 
-    private void selectPieceToMove(Square square) {
+    private void firstCommunication() {
+        try {
+            this.communicationControllerImpl = new CommunicationControllerImpl(this.board, this.buffer, this.view, () -> { secondCommunication();});
+            this.communicationControllerImpl.setResetFunction(() -> resetGame());
+            CommunicationController stub = (CommunicationController) UnicastRemoteObject.exportObject(communicationControllerImpl, 0);
+            if (this.player.getId() == 1)
+                registry = LocateRegistry.createRegistry(3000);
+            else
+                registry = LocateRegistry.getRegistry(3000);
+            registry.rebind("Communication" + player.getId(), stub);
+        } catch (RemoteException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void secondCommunication() {
+        try {
+            this.communicator = (CommunicationController) LocateRegistry.getRegistry(3000).lookup("Communication" + opponent.getId());
+        } catch (RemoteException | NotBoundException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void selectPieceToMove(Square hexagon) {
         if (!this.possibleMoves.isEmpty())
             this.clearHighlightedCells();
         if (canMove) {
-            if (this.hasJumped && !square.equals(this.movingPiece))
+            if (this.hasJumped && !hexagon.equals(this.movingPiece))
                 return;
 
             if (this.movingPiece != null) this.movingPiece.deselectCell();
-            this.movingPiece = square;
-            square.selectCell();
-            this.highlightPossibleMoves(square);
+            this.movingPiece = hexagon;
+            hexagon.selectCell();
+            this.highlightPossibleMoves(hexagon);
         }
 
     }
 
     private void clearHighlightedCells() {
-        for (Square square : this.possibleMoves) {
-            if (square != null && square.isEmpty()) {
-                square.reset();
+        for (Square hexagon : this.possibleMoves) {
+            if (hexagon != null && hexagon.isEmpty()) {
+                hexagon.reset();
             }
         }
         this.possibleMoves.clear();
@@ -92,7 +117,11 @@ public class GameViewController {
         this.sendMoveCommand(from, to);
 
         if (this.board.winCondition(player)) {
-            this.communicationController.addCommand(new VictoryCommand(this.player));
+            try {
+                this.communicator.victory(player);
+            } catch (RemoteException e1) {
+                e1.printStackTrace();
+            }
             this.view.showVictoryPane();
             this.view.showResetButton();
         }
@@ -110,43 +139,47 @@ public class GameViewController {
         this.sendMoveCommand(from, to);
 
         if (this.board.winCondition(player)) {
-            this.communicationController.addCommand(new VictoryCommand(this.player));
+            try {
+                this.communicator.victory(player);
+            } catch (RemoteException e1) {
+                e1.printStackTrace();
+            }
             this.view.showVictoryPane();
             this.view.showResetButton();
         }
     }
 
-    private void highlightNeighborMoves(Square square) {
+    private void highlightNeighborMoves(Square hexagon) {
         for (Square possibleMove : this.possibleMoves) {
             if (possibleMove.isEmpty()) {
                 possibleMove.setMovable(true);
                 possibleMove.getHex().getStyleClass().add("hex-highlight");
-                possibleMove.getHex().setOnMouseClicked(e -> moveToNeighbor(square, possibleMove));
+                possibleMove.getHex().setOnMouseClicked(e -> moveToNeighbor(hexagon, possibleMove));
             }
         }
     }
 
 
-    private void highlightJumpMoves(Square squareToJump, Square originSquare) {
-        for (Square possibleMove : this.board.getAdjacentTo(squareToJump)) {
+    private void highlightJumpMoves(Square hexagonToJump, Square originHexagon) {
+        for (Square possibleMove : this.board.getAdjacentTo(hexagonToJump)) {
             if (possibleMove.isEmpty() && !possibleMove.isMovable() ) {
                 possibleMove.getHex().getStyleClass().add("hex-highlight");
-                possibleMove.getHex().setOnMouseClicked(e -> jumpToCell(originSquare, possibleMove));
+                possibleMove.getHex().setOnMouseClicked(e -> jumpToCell(originHexagon, possibleMove));
                 this.possibleMoves.add(possibleMove);
             }
         }
     }
 
-    public void highlightPossibleMoves(Square square) {
-        List<Square> neighborSquares = this.board.getAdjacentTo(square);
+    public void highlightPossibleMoves(Square hexagon) {
+        List<Square> neighborHexagons = this.board.getAdjacentTo(hexagon);
         if (!hasJumped) {
-            this.possibleMoves.addAll(neighborSquares);
-            highlightNeighborMoves(square);
+            this.possibleMoves.addAll(neighborHexagons);
+            highlightNeighborMoves(hexagon);
         }
 
-        for (Square neighborSquare : neighborSquares) {
-            if (!neighborSquare.isEmpty()) {
-                highlightJumpMoves(neighborSquare, square);
+        for (Square neighborHexagon : neighborHexagons) {
+            if (!neighborHexagon.isEmpty()) {
+                highlightJumpMoves(neighborHexagon, hexagon);
             }
         }
     }
@@ -174,9 +207,8 @@ public class GameViewController {
         if (this.player.getId() == 2)
             this.view.addClickPreventionPane();
         this.initPlayerArea();
-        this.initOponentsArea(oponent);
+        this.initOpponentArea(opponent);
         this.view.createGameScene();
-        initUpdaterThread();
         CountTurnHelper.turn++;
     }
 
@@ -185,7 +217,11 @@ public class GameViewController {
         if (text != null && !text.isEmpty()) {
             this.buffer.append(text);
             this.view.getMessageTextArea().clear();
-            this.communicationController.addCommand(new MessageCommand(text, this.player));
+            try {
+                this.communicator.sendMessage(player, text);
+            } catch (RemoteException e) {
+                e.printStackTrace();
+            }
         }
     }
 
@@ -199,13 +235,21 @@ public class GameViewController {
             this.view.addClickPreventionPane();
             this.view.showOponentTurn();
             CountTurnHelper.turn++;
-            this.communicationController.addCommand(new EndTurnCommand(CountTurnHelper.turn));
+            try {
+                this.communicator.endTurn(CountTurnHelper.turn);
+            } catch (RemoteException e) {
+                e.printStackTrace();
+            }
         }
     }
 
     private void giveUp() {
         this.clearHighlightedCells();
-        this.communicationController.addCommand(new GiveUpCommand());
+        try {
+            this.communicator.giveup();
+        } catch (RemoteException e) {
+            e.printStackTrace();
+        }
         this.view.showGivenUpPane();
         this.view.showResetButton();
     }
@@ -215,54 +259,46 @@ public class GameViewController {
 
         for (int i = 0; i < Board.BOARD_HEIGHT; i++) {
             for (int j = 0; j < Board.BOARD_WIDTH; j++) {
-                Square square = board.getBoardMatrix()[i][j];
-                if (square != null) {
-                    boardPane.getChildren().add(square.getHex());
+                Square hexagon = board.getBoardMatrix()[i][j];
+                if (hexagon != null) {
+                    boardPane.getChildren().add(hexagon.getHex());
                 }
             }
         }
         return boardPane;
     }
 
-    private void initOponentsArea(Player oponent) {
+    private void initOpponentArea(Player oponent) {
         for (int[] position : MatrizUtilitary.getArea(oponent.getArea())) {
-            Square square = this.board.getBoardMatrix()[position[0]][position[1]];
-            square.setOwner(oponent);
+            Square hexagon = this.board.getBoardMatrix()[position[0]][position[1]];
+            hexagon.setOwner(oponent);
         }
     }
 
     private void initPlayerArea() {
         for (int[] position : MatrizUtilitary.getArea(player.getArea())) {
-            Square square = this.board.getBoardMatrix()[position[0]][position[1]];
-            square.setOwner(player);
-            square.getHex().setOnMouseClicked(e -> selectPieceToMove(square));
+            Square hexagon = this.board.getBoardMatrix()[position[0]][position[1]];
+            hexagon.setOwner(player);
+            hexagon.getHex().setOnMouseClicked(e -> selectPieceToMove(hexagon));
         }
     }
 
     private void sendMoveCommand(Square from, Square to) {
-        this.communicationController.addCommand(new MoveCommand(from, to, this.player));
-    }
-
-    public void createServer() {
-        try {
-            this.communicationController.createServer();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    public void connect() {
-        try {
-            this.communicationController.connect();
-        } catch (IOException e) {
+        try{
+            this.communicator.move(from.getMatrixIndexRow(), from.getMatrixIndexColumn(), to.getMatrixIndexRow(), to.getMatrixIndexColumn(), player);
+        } catch (RemoteException e){
             e.printStackTrace();
         }
     }
 
     public void closeGame() {
-        if (this.threadUpdateView != null)
-            this.threadUpdateView.stop();
-        this.communicationController.stopCommunication();
+        try {
+            this.registry.unbind("Communication" + player.getId());
+        } catch (RemoteException | NotBoundException e) {
+            e.printStackTrace();
+        } finally {
+            System.exit(0);
+        }
     }
 
     public void startGame() {
@@ -270,24 +306,31 @@ public class GameViewController {
         if (this.player.getId() == 1) {
             this.view.showWaitingScene();
             this.view.showPlayerTurn();
-            new Thread(() -> createServer()).start();
         }
         else {
-            connect();
+            try {
+                this.communicator.startGame();
+            } catch (RemoteException e) {
+                e.printStackTrace();
+            }
             this.view.showOponentTurn();
         }
     }
 
     private void restartGame() {
-        this.communicationController.addCommand(new RestartCommand());
-        resetState();
+        try {
+            this.communicator.restartGame();
+        } catch (RemoteException e) {
+            e.printStackTrace();
+        }
+        resetGame();
     }
 
-    private void resetState() {
+    private void resetGame() {
         resetBoard();
         resetStatesFlag();
         initPlayerArea();
-        initOponentsArea(oponent);
+        initOpponentArea(opponent);
 
         this.view.showControlButtons();
         this.view.resetBoard();
@@ -303,9 +346,9 @@ public class GameViewController {
     private void resetBoard() {
         for (int i = 0; i < Board.BOARD_HEIGHT; i++) {
             for (int j = 0; j < Board.BOARD_WIDTH; j++) {
-                Square square = board.getBoardMatrix()[i][j];
-                if (square != null) {
-                    square.reset();
+                Square hexagon = board.getBoardMatrix()[i][j];
+                if (hexagon != null) {
+                    hexagon.reset();
                 }
             }
         }
