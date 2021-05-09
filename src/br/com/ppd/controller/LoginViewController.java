@@ -50,8 +50,6 @@ public class LoginViewController {
     }
 
     private void createGameController(Player player, Player oponent) {
-        String ipAddress = this.view.getIp().getText();
-        int port = Integer.parseInt(this.view.getPort().getText());
         GameViewController gameController = new GameViewController(this.stage, player, oponent);
         gameController.startGame();
     }
